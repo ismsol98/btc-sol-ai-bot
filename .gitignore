@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Environment variables (RAHASIA - jangan pernah commit!)
+.env
+
+# Data runtime (berisi trade history - opsional untuk backup)
+data/trades.json
+data/params.json
+data/chatids.json
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

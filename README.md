@@ -120,11 +120,17 @@ Kedua model ini tersedia gratis di OpenRouter tanpa perlu isi saldo.
 
 ### Command PM2 yang Sering Dipakai
 pm2 status                                    # Lihat status bot
+
 pm2 logs btc-sol-ai-bot --lines 30 --nostream # Lihat log terbaru
+
 pm2 logs btc-sol-ai-bot                       # Log real-time
+
 pm2 restart btc-sol-ai-bot                    # Restart bot
+
 pm2 stop btc-sol-ai-bot                       # Stop bot
+
 pm2 flush btc-sol-ai-bot                      # Bersihkan log lama
+
 
 ---
 

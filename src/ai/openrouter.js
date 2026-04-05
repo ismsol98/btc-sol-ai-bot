@@ -16,62 +16,63 @@ class OpenRouterClient {
     this.sessions = new Map();
     this.maxHistoryLength = 10;
 
-    // System prompt untuk trading bot
-    this.systemPrompt = `Kamu adalah AI Trading Assistant yang ahli dalam:
-- Analisa teknikal cryptocurrency (BTC & SOL)
-- Strategi EMA Pullback Scalping (5m/15m timeframe)
-- Risk management trading
-- Membaca kondisi market intraday
-
-Sistem trading yang kamu gunakan:
-- Strategi: 5-Minute EMA Pullback Scalping
-- Indikator: EMA9, EMA21, RSI14, Volume
-- Pair: BTC/USD dan SOL/USD
-- Timeframe bias: 15m, Entry: 5m
-- Risk: SL 0.45-0.55%, TP1 RR1:1, TP2 RR1:2
-
-Sifat jawaban:
-- Langsung dan informatif
-- Gunakan Bahasa Indonesia
-- Sertakan angka dan data spesifik jika relevan
-- Jika ditanya tentang sesuatu di luar kapabilitasmu, jelaskan dengan jujur
-- JANGAN berikan saran untuk trading dengan leverage tinggi atau untung besar tanpa risiko
-- Selalu ingatkan bahwa semua signal adalah BUKAN saran finansial resmi
-
-Kamu memiliki akses ke data sinyal terbaru yang akan disertakan dalam konteks jika tersedia.`;
+    // System prompt yang bersih dan detail
+    this.systemPrompt = [
+      'Kamu adalah AI Trading Assistant yang sangat analitis dan disiplin untuk strategi EMA Pullback Scalping pada BTC/USDT dan SOL/USDT.',
+      '',
+      'Kamu memiliki akses penuh ke Learning System yang menyimpan semua signal dan hasil trade.',
+      'Tujuan utamamu adalah meningkatkan winrate dan expectancy jangka panjang dengan belajar dari setiap hasil.',
+      '',
+      'Saat user melaporkan hasil trade (contoh: "TP1 hit", "TP2 hit", "SL hit", "loss", "manual close"), kamu harus:',
+      '- Langsung mencatat dan menganalisa',
+      '- Hitung winrate, average RR, dan expectancy',
+      '- Identifikasi pola gagal (low volume, ranging choppy, false breakout, news interference, dll)',
+      '- Berikan rekomendasi perbaikan yang konkret untuk signal berikutnya',
+      '',
+      'Metrik yang selalu kamu pantau:',
+      '- Win Rate (%)',
+      '- Average RR aktual',
+      '- Expectancy = (Win% x Avg Win RR) - (Loss% x 1)',
+      '',
+      'Gaya jawaban:',
+      '- Langsung, jujur, dan analitis',
+      '- Gunakan Bahasa Indonesia yang mudah dipahami',
+      '- Selalu sebutkan winrate terkini jika relevan',
+      '- Berikan saran perbaikan yang spesifik',
+      '- Selalu ingatkan bahwa semua signal BUKAN saran finansial resmi',
+      '',
+      'Kamu boleh melihat data performa terbaru setiap kali user chat.',
+      '',
+      '[PERINGATAN] Selalu ingatkan bahwa trading crypto berisiko tinggi dan semua keputusan akhir ada di tangan user.'
+    ].join('\n');
   }
 
-  // ==========================================
-  // KIRIM PESAN KE AI
-  // ==========================================
   async chat(chatId, userMessage, context = '') {
-    // Ambil atau buat session
     if (!this.sessions.has(chatId)) {
       this.sessions.set(chatId, []);
     }
 
     const history = this.sessions.get(chatId);
 
-    // Siapkan pesan user (dengan konteks jika ada)
     const fullUserMessage = context
-      ? `[Konteks sistem: ${context}]\n\nPesan user: ${userMessage}`
+      ? '[Konteks sistem: ' + context + ']\n\nPesan user: ' + userMessage
       : userMessage;
 
-    // Tambah ke history
     history.push({ role: 'user', content: fullUserMessage });
 
-    // Batasi history
     if (history.length > this.maxHistoryLength) {
       history.splice(0, history.length - this.maxHistoryLength);
     }
 
-    // Coba dengan model utama dulu, lalu fallback
-    for (const model of [this.model, this.fallbackModel]) {
+    const models = [this.model, this.fallbackModel];
+
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
       try {
         const response = await axios.post(
-          `${this.baseUrl}/chat/completions`,
+          this.baseUrl + '/chat/completions',
           {
-            model,
+            model: model,
             messages: [
               { role: 'system', content: this.systemPrompt },
               ...history,
@@ -81,68 +82,43 @@ Kamu memiliki akses ke data sinyal terbaru yang akan disertakan dalam konteks ji
           },
           {
             headers: {
-              'Authorization': `Bearer ${this.apiKey}`,
+              'Authorization': 'Bearer ' + this.apiKey,
               'Content-Type': 'application/json',
-              'HTTP-Referer': 'https://github.com/crypto-signal-bot',
-              'X-Title': 'Crypto Signal Bot',
+              'HTTP-Referer': 'https://github.com/ismsol198/btc-sol-ai-bot',
+              'X-Title': 'BTC-SOL AI Bot',
             },
             timeout: 30000,
           }
         );
 
-        const assistantMessage = response.data?.choices?.[0]?.message?.content;
+        const assistantMessage = response.data &&
+          response.data.choices &&
+          response.data.choices[0] &&
+          response.data.choices[0].message &&
+          response.data.choices[0].message.content;
 
         if (!assistantMessage) {
           throw new Error('Response kosong dari API');
         }
 
-        // Simpan response ke history
         history.push({ role: 'assistant', content: assistantMessage });
-
-        logger.info(`🤖 AI response berhasil (model: ${model})`);
+        logger.info('AI response berhasil (model: ' + model + ')');
         return assistantMessage;
+
       } catch (err) {
-        logger.warn(`⚠️ AI error dengan model ${model}: ${err.message}`);
-        if (model === this.fallbackModel) {
+        logger.warn('AI error dengan model ' + model + ': ' + err.message);
+        if (i === models.length - 1) {
           throw err;
         }
-        logger.info(`🔄 Mencoba fallback model: ${this.fallbackModel}`);
       }
     }
 
     throw new Error('Semua model gagal merespons');
   }
 
-  // ==========================================
-  // CLEAR SESSION (reset percakapan)
-  // ==========================================
   clearSession(chatId) {
     this.sessions.delete(chatId);
-    logger.info(`🗑️ Session AI untuk chat ${chatId} direset`);
-  }
-
-  // ==========================================
-  // ANALISA MARKET DENGAN AI (opsional)
-  // ==========================================
-  async analyzeMarket(pair, indicators, signal) {
-    const prompt = `Berikan analisa singkat kondisi market saat ini untuk ${pair}:
-- EMA9: ${indicators.ema9?.toFixed(2)}
-- EMA21: ${indicators.ema21?.toFixed(2)}
-- RSI: ${indicators.rsi?.toFixed(1)}
-- Volume multiplier: ${indicators.volumeMultiplier}x
-- Signal: ${signal}
-
-Berikan pendapat 2-3 kalimat tentang kualitas setup ini.`;
-
-    try {
-      const tempChatId = `analysis_${Date.now()}`;
-      const result = await this.chat(tempChatId, prompt);
-      this.clearSession(tempChatId);
-      return result;
-    } catch (err) {
-      logger.error(`❌ Gagal analisa AI: ${err.message}`);
-      return null;
-    }
+    logger.info('Session AI untuk chat ' + chatId + ' direset');
   }
 }
 

@@ -4,7 +4,7 @@
 module.exports = {
   apps: [
     {
-      name: 'crypto-signal-bot',
+      name: 'btc-sol-ai-bot',
       script: 'index.js',
       cwd: './',
       instances: 1,

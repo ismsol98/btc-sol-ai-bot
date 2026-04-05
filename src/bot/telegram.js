@@ -284,42 +284,65 @@ class TelegramBotHandler {
   // ==========================================
   _setupMessageHandler() {
     this.bot.on('message', async (msg) => {
-      // Skip jika pesan adalah command
       if (msg.text?.startsWith('/')) return;
-      // Skip jika bukan text
       if (!msg.text) return;
 
       const chatId = String(msg.chat.id);
-      const userText = msg.text.trim();
+      const userText = msg.text.trim().toLowerCase();
 
       // Auto-register chat ID
       this.chatIds.add(chatId);
       await this._saveChatIds();
 
+      // === DETEKSI FEEDBACK HASIL TRADE ===
+      const lastSignal = await learningSystem.getLastSignal();
+      if (lastSignal && lastSignal.status === 'OPEN') {
+        let outcome = null;
+
+        if (userText.includes('tp1') || userText.includes('tp 1') || userText.includes('take profit 1')) {
+          outcome = 'WIN_TP1';
+        } else if (userText.includes('tp2') || userText.includes('tp 2') || userText.includes('take profit 2')) {
+          outcome = 'WIN_TP2';
+        } else if (userText.includes('sl') || userText.includes('stop loss') || userText.includes('loss')) {
+          outcome = 'LOSS';
+        } else if (userText.includes('manual') || userText.includes('close')) {
+          outcome = 'MANUAL_CLOSE';
+        }
+
+        if (outcome) {
+          const exitPrice = lastSignal.entryPrice;
+          await learningSystem.closeTrade(lastSignal.id, exitPrice, outcome);
+
+          await this._send(chatId,
+            `✅ Trade **${lastSignal.pair} ${lastSignal.signal}** telah dicatat sebagai **${outcome}**.\nAI akan belajar dari hasil ini.`,
+            { parse_mode: 'Markdown' }
+          );
+          return;
+        }
+      }
+
+      // === CHAT BIASA DENGAN AI ===
       try {
-        // Tampilkan "typing..."
         this.bot.sendChatAction(chatId, 'typing');
 
-        // Siapkan konteks dari status engine
         const status = signalEngine.getStatus();
-        const lastScanInfo = status.pairs.map(p => {
-          const r = p.lastResult;
-          if (!r) return `${p.symbol}: belum ada data`;
-          return `${p.symbol}: signal=${r.signal || 'NONE'}, bias=${r.bias || '-'}`;
-        }).join('; ');
+        const stats = await learningSystem.getPerformanceStats();
 
-        const context = `Status engine: ${status.isRunning ? 'aktif' : 'mati'}, scan ke-${status.scanCount}, uptime ${status.uptime}. Scan terakhir: ${lastScanInfo}`;
+        const context = `Status saat ini:
+- Engine: ${status.isRunning ? 'AKTIF' : 'MATI'}
+- Total scan: ${status.scanCount}
+- Winrate keseluruhan: ${stats.winRate}%
+- Open trade: ${stats.open}
+- Trade closed: ${stats.closed}
+- BTC winrate: ${stats.btc.winRate}%
+- SOL winrate: ${stats.sol.winRate}%`;
 
-        // Chat dengan AI
-        const response = await openRouter.chat(chatId, userText, context);
+        const response = await openRouter.chat(chatId, msg.text, context);
 
         await this._send(chatId, response, { parse_mode: 'Markdown' });
       } catch (err) {
         logger.error(`❌ Error AI chat: ${err.message}`);
-        await this._send(chatId,
-          '❌ Maaf, AI sedang tidak tersedia. Coba lagi beberapa saat atau cek /status.',
-          { parse_mode: 'Markdown' }
-        );
+        await this._send(chatId, '❌ Maaf, AI sedang sibuk. Coba lagi sebentar.');
       }
     });
   }

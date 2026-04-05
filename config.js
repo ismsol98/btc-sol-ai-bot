@@ -11,10 +11,10 @@ const config = {
   },
 
   // ---- API Keys ----
-  twelveData: {
-    apiKey: process.env.TWELVE_DATA_API_KEY,
-    baseUrl: 'https://api.twelvedata.com',
-  },
+//  twelveData: {
+//    apiKey: process.env.TWELVE_DATA_API_KEY,
+//    baseUrl: 'https://api.twelvedata.com',
+//  },
 
   openRouter: {
     apiKey: process.env.OPENROUTER_API_KEY,
@@ -26,14 +26,14 @@ const config = {
 
   // ---- Trading Pairs ----
   pairs: [
-    { symbol: 'BTC/USD', twelveSymbol: 'BTC/USD', name: 'Bitcoin' },
-    { symbol: 'SOL/USD', twelveSymbol: 'SOL/USD', name: 'Solana' },
+    { symbol: 'BTC/USDT', twelveSymbol: 'BTCUSDT', name: 'Bitcoin' },
+    { symbol: 'SOL/USDT', twelveSymbol: 'SOLUSDT', name: 'Solana' },
   ],
 
   // ---- Timeframes ----
   timeframes: {
-    scalp: '5min',   // Timeframe utama untuk entry
-    bias: '15min',   // Timeframe untuk bias market
+    scalp: '5m',   // Timeframe utama untuk entry
+    bias: '15m',   // Timeframe untuk bias market
   },
 
   // ---- Strategi EMA Pullback ----
@@ -49,7 +49,7 @@ const config = {
     },
     volume: {
       lookback: 10,        // Jumlah candle untuk rata-rata volume
-      spikeMultiplier: 1.8, // Volume harus >= 1.8x rata-rata
+      spikeMultiplier: 1.6, // Volume harus >= 1.6x rata-rata
     },
     risk: {
       slPercent: 0.5,    // Stop Loss 0.5%
@@ -79,7 +79,7 @@ const config = {
 function validateConfig() {
   const errors = [];
   if (!config.telegram.token) errors.push('TELEGRAM_BOT_TOKEN tidak diset');
-  if (!config.twelveData.apiKey) errors.push('TWELVE_DATA_API_KEY tidak diset');
+//  if (!config.twelveData.apiKey) errors.push('TWELVE_DATA_API_KEY tidak diset');
   if (!config.openRouter.apiKey) errors.push('OPENROUTER_API_KEY tidak diset');
 
   if (errors.length > 0) {

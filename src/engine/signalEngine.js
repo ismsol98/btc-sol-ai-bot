@@ -3,7 +3,7 @@
 
 const config = require('../../config');
 const logger = require('../utils/logger');
-const twelveData = require('../data/twelvedata');
+const twelveData = require('../data/binance');
 const strategy = require('../strategy/emaScalping');
 const learningSystem = require('../learning/learningSystem');
 

@@ -1,6 +1,6 @@
 // src/strategy/emaScalping.js
 // Implementasi PENUH strategi 5-Minute EMA Pullback Scalping
-// Jangan ubah logic ini tanpa memahami strategi sepenuhnya!
+// Versi di-relax: Pullback Tolerance 0.6% + Volume Spike 1.6x
 
 const config = require('../../config');
 const logger = require('../utils/logger');
@@ -14,7 +14,6 @@ class EMAScalpingStrategy {
   // UTILITAS KALKULASI
   // ==========================================
 
-  // Hitung rata-rata volume dari N candle terakhir
   _avgVolume(candles, lookback) {
     if (candles.length < lookback) return 0;
     const recent = candles.slice(-lookback);
@@ -22,32 +21,27 @@ class EMAScalpingStrategy {
     return total / lookback;
   }
 
-  // Ambil nilai terakhir dari array indikator
   _last(arr, n = 1) {
     if (!arr || arr.length < n) return null;
     return arr[arr.length - n];
   }
 
-  // Ambil nilai dari 2 candle sebelumnya (untuk cek trend RSI)
   _prev(arr) {
     return this._last(arr, 2);
   }
 
-  // Cek apakah harga berada di dekat EMA (dalam range pullback)
+  // Cek apakah harga berada di dekat EMA (range pullback)
   _isPullbackToEMA(price, ema9Val, ema21Val, direction) {
-    // Range pullback: harga dalam 0.3% dari EMA 9 atau EMA 21
-    const pullbackTolerance = 0.003; // 0.3%
+    // Range pullback: harga dalam 0.6% dari EMA 9 atau EMA 21
+    const pullbackTolerance = 0.006; // 0.6% ← sudah di-relax
 
     const distEma9 = Math.abs(price - ema9Val) / ema9Val;
     const distEma21 = Math.abs(price - ema21Val) / ema21Val;
 
-    // Untuk LONG: harga pullback dari atas, mendekati EMA dari atas
     if (direction === 'LONG') {
-      // Harga harus di atas atau sangat dekat EMA 21, dan mendekati EMA 9 atau EMA 21
       return (distEma9 <= pullbackTolerance || distEma21 <= pullbackTolerance);
     }
     
-    // Untuk SHORT: harga pullback dari bawah, mendekati EMA dari bawah
     if (direction === 'SHORT') {
       return (distEma9 <= pullbackTolerance || distEma21 <= pullbackTolerance);
     }
@@ -75,7 +69,6 @@ class EMAScalpingStrategy {
     const currentPrice = lastCandle.close;
     const ema21Val = lastEma21.value;
 
-    // Bias BULLISH: harga penutupan > EMA 21 di 15m
     if (currentPrice > ema21Val) {
       const pctAbove = ((currentPrice - ema21Val) / ema21Val * 100).toFixed(3);
       return {
@@ -86,7 +79,6 @@ class EMAScalpingStrategy {
       };
     }
 
-    // Bias BEARISH: harga penutupan < EMA 21 di 15m
     if (currentPrice < ema21Val) {
       const pctBelow = ((ema21Val - currentPrice) / ema21Val * 100).toFixed(3);
       return {
@@ -114,7 +106,6 @@ class EMAScalpingStrategy {
       return { signal: 'NONE', reason: 'Jumlah data 5m tidak cukup' };
     }
 
-    // Ambil data terbaru
     const lastCandle = this._last(candles);
     const prevCandle = this._prev(candles);
     const lastEma9 = this._last(ema9);
@@ -138,26 +129,17 @@ class EMAScalpingStrategy {
     const volMultiplier = avgVol > 0 ? currentVol / avgVol : 0;
     const volumeSpike = volMultiplier >= this.cfg.volume.spikeMultiplier;
 
-    // ==========================================
     // LOGIC ENTRY LONG
-    // ==========================================
     if (bias === 'BULLISH') {
       const checks = {
-        // Kondisi 1: EMA 9 > EMA 21 di 5m (trend up)
         emaTrendUp: ema9Val > ema21Val,
-        // Kondisi 2: Harga pullback ke EMA 9 / EMA 21 (5m)
         pullbackToEMA: this._isPullbackToEMA(price, ema9Val, ema21Val, 'LONG'),
-        // Kondisi 3: Candle close DI ATAS EMA 9
         closeAboveEma9: price > ema9Val,
-        // Kondisi 4: RSI > 50 dan naik (tidak overbought)
         rsiOk: rsiVal > this.cfg.rsi.minLong && rsiVal <= 70 && rsiVal > rsiPrevVal,
-        // Kondisi 5: Volume spike >= 1.8x rata-rata
         volumeOk: volumeSpike,
       };
 
-      const failedChecks = Object.entries(checks)
-        .filter(([, v]) => !v)
-        .map(([k]) => k);
+      const failedChecks = Object.entries(checks).filter(([, v]) => !v).map(([k]) => k);
 
       if (failedChecks.length === 0) {
         return {
@@ -186,26 +168,17 @@ class EMAScalpingStrategy {
       };
     }
 
-    // ==========================================
     // LOGIC ENTRY SHORT
-    // ==========================================
     if (bias === 'BEARISH') {
       const checks = {
-        // Kondisi 1: EMA 9 < EMA 21 di 5m (trend down)
         emaTrendDown: ema9Val < ema21Val,
-        // Kondisi 2: Harga pullback ke EMA 9 / EMA 21 (5m) dari bawah
         pullbackToEMA: this._isPullbackToEMA(price, ema9Val, ema21Val, 'SHORT'),
-        // Kondisi 3: Candle close DI BAWAH EMA 9
         closeBelowEma9: price < ema9Val,
-        // Kondisi 4: RSI < 50 dan turun (tidak oversold)
         rsiOk: rsiVal < this.cfg.rsi.maxShort && rsiVal >= 30 && rsiVal < rsiPrevVal,
-        // Kondisi 5: Volume spike >= 1.8x rata-rata
         volumeOk: volumeSpike,
       };
 
-      const failedChecks = Object.entries(checks)
-        .filter(([, v]) => !v)
-        .map(([k]) => k);
+      const failedChecks = Object.entries(checks).filter(([, v]) => !v).map(([k]) => k);
 
       if (failedChecks.length === 0) {
         return {
@@ -283,11 +256,10 @@ class EMAScalpingStrategy {
   }
 
   // ==========================================
-  // FULL ANALYSIS - Gabungan semua analisa
+  // FULL ANALYSIS
   // ==========================================
   analyze(pair, data5m, data15m) {
     try {
-      // 1. Analisa bias 15m
       const biasResult = this.analyzeBias15m(data15m);
       logger.info(`📊 [${pair}] Bias 15m: ${biasResult.bias} - ${biasResult.reason}`);
 
@@ -300,7 +272,6 @@ class EMAScalpingStrategy {
         };
       }
 
-      // 2. Analisa entry 5m berdasarkan bias
       const entryResult = this.analyzeEntry5m(data5m, biasResult.bias);
       logger.info(`📈 [${pair}] Entry 5m: ${entryResult.signal} - ${entryResult.reason || 'Signal ditemukan'}`);
 
@@ -322,10 +293,8 @@ class EMAScalpingStrategy {
         };
       }
 
-      // 3. Hitung level SL & TP
       const levels = this.calculateLevels(entryResult.signal, entryResult.entryPrice);
 
-      // 4. Gabungkan hasil
       return {
         pair,
         signal: entryResult.signal,
@@ -407,7 +376,7 @@ class EMAScalpingStrategy {
       `Harga pullback ke area EMA9/EMA21 di 5m`,
       `Candle close di atas EMA9 (${price.toFixed(2)} > ${ema9.toFixed(2)})`,
       `RSI ${rsi.toFixed(1)} > 50 dan trending naik`,
-      `Volume spike ${volMult.toFixed(2)}x rata-rata (min 1.8x)`,
+      `Volume spike ${volMult.toFixed(2)}x rata-rata (min 1.6x)`,
     ];
   }
 
@@ -417,7 +386,7 @@ class EMAScalpingStrategy {
       `Harga pullback ke area EMA9/EMA21 di 5m`,
       `Candle close di bawah EMA9 (${price.toFixed(2)} < ${ema9.toFixed(2)})`,
       `RSI ${rsi.toFixed(1)} < 50 dan trending turun`,
-      `Volume spike ${volMult.toFixed(2)}x rata-rata (min 1.8x)`,
+      `Volume spike ${volMult.toFixed(2)}x rata-rata (min 1.6x)`,
     ];
   }
 }

@@ -172,8 +172,11 @@ Bot AI akan otomatis mencatat, menghitung winrate, dan memberikan analisis serta
 
 ### Via VPS
 pm2 logs btc-sol-ai-bot          # Log real-time
+
 pm2 logs btc-sol-ai-bot --err    # Error saja
+
 pm2 monit                        # Dashboard lengkap
+
 
 ### Troubleshooting Umum
 
